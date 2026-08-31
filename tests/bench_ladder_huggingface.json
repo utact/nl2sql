@@ -1,0 +1,44 @@
+{
+  "Qwen/Qwen2.5-0.5B-Instruct": {
+    "naive": {
+      "ok": 0,
+      "loud": 35,
+      "quiet": 35
+    },
+    "ours": {
+      "ok": 25,
+      "loud": 35,
+      "quiet": 10
+    },
+    "quiet_questions": {
+      "우리가 재고 있는 검사 항목 뭐뭐 있어?": 5,
+      "품질 안 좋은 항목 알려줘": 5
+    },
+    "seconds": 885.9,
+    "backend": "huggingface",
+    "runs": 5,
+    "questions": 14,
+    "measured_at": "2026-08-20T11:07:58"
+  },
+  "Qwen/Qwen2.5-1.5B-Instruct": {
+    "naive": {
+      "ok": 20,
+      "loud": 10,
+      "quiet": 40
+    },
+    "ours": {
+      "ok": 25,
+      "loud": 35,
+      "quiet": 10
+    },
+    "quiet_questions": {
+      "라인별로 규격에 아슬아슬한 건수 알려줘": 5,
+      "직원 연봉 알려줘": 5
+    },
+    "seconds": 1301.9,
+    "backend": "huggingface",
+    "runs": 5,
+    "questions": 14,
+    "measured_at": "2026-08-20T11:07:58"
+  }
+}

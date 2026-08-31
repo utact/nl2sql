@@ -1,0 +1,32 @@
+# 안전 축 확인용 PostgreSQL.
+#
+# 데모의 다섯 장면은 SQLite로 돈다. 전부 correctness 이야기라 DB 종류와 무관하다.
+# 이 compose 는 SQLite로는 증명할 수 없는 것 하나를 위해 있다 —
+# "접근 통제는 앱이 아니라 DB가 닫는다"는 주장.
+#
+#   docker compose -f deploy/compose.yaml up -d
+#   python -m domain.seed --target postgres
+#   NL2SQL_DB_BACKEND=postgres uvicorn app.server:app
+#
+# security_invoker 뷰를 쓰므로 PostgreSQL 15 이상이 필요하다.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: inspection
+      POSTGRES_USER: postgres
+      # 데모 전용이다. 운영 자격증명을 이 파일에 두지 않는다.
+      POSTGRES_PASSWORD: demo-only-not-a-secret
+    ports:
+      # 호스트에 PostgreSQL 이 이미 깔려 있으면 5432 를 그쪽이 잡고 있어
+      # 컨테이너가 가려진다 (연결은 되는데 "password authentication failed" 가 난다).
+      # 그때는 NL2SQL_PG_PORT=5433 처럼 다른 포트를 주고 DSN 도 같이 바꾼다.
+      - "${NL2SQL_PG_PORT:-5432}:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inspection"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

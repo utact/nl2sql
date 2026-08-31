@@ -1,0 +1,47 @@
+# 골든셋이 논지의 일부인 저장소라 CI 가 비어 있으면 그 논지가 자기 말을 안 지킨다.
+#
+# 여기서 도는 것은 LLM 을 안 부르는 층뿐이다 (1·2·4층 + 회귀 + 규약).
+# 3층 라우팅은 실제 모델이 필요해서 기본으로 건너뛴다 — 그 30건은 로컬에서 NL2SQL_TEST_LLM=1 로 켠다.
+# CI 가 모델 키를 들고 있으면 PR 마다 돈이 나가고, 외부 서빙이 흔들릴 때 초록·빨강이 코드와 무관해진다.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # requires-python 의 하한과 현재 안정판 양쪽에서 돈다.
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 의존성 설치
+        # postgres 엑스트라를 함께 넣는다.
+        # psycopg 가 없으면 introspect 의 오류 처리 분기가 SQLite 쪽으로만 컴파일되어 CI 가 배포 형상과 달라진다.
+        #
+        # api 엑스트라도 넣는다.
+        # 호스팅 백엔드는 httpx 를 생성자 안에서 지연 import 하므로 그 엑스트라 없이 도는 CI 는 의존성 선언이 맞는지 한 번도 확인하지 않는다.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,postgres,api]"
+
+      - name: ruff
+        run: ruff check .
+
+      - name: pytest
+        run: pytest -q
