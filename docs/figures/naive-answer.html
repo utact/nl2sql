@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>라인별로 규격에 아슬아슬한 건수 알려줘</title>
+<style>
+  :root {
+    --bg: #ffffff; --shell: #f7f8fc; --ink: #1c1f2e; --dim: #5a6178;
+    --faint: #8c93a8; --rule: #e5e7f0; --accent: #5b4ee8; --accent-soft: #eeecff;
+    --sans: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+            "Malgun Gothic", "Segoe UI", sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "D2Coding", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--shell); font: 15px/1.75 var(--sans); color: var(--ink); }
+  .app { width: 1080px; background: var(--bg); }
+  header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 24px; border-bottom: 1px solid var(--rule);
+  }
+  .logo {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: linear-gradient(135deg, #6d5ef0, #9d7bf5);
+  }
+  .brand { font-weight: 650; font-size: 14.5px; letter-spacing: -.01em; }
+  .brand span { color: var(--faint); font-weight: 400; margin-left: 7px; font-size: 13px; }
+  .thread { padding: 22px 24px 8px; }
+  .ask { display: flex; justify-content: flex-end; margin-bottom: 26px; }
+  .ask div {
+    background: var(--accent); color: #fff; padding: 10px 16px;
+    border-radius: 16px 16px 4px 16px; font-size: 14.5px; max-width: 70%;
+  }
+  .reply { display: flex; gap: 12px; }
+  .avatar {
+    flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-size: 14px; margin-top: 2px;
+  }
+  .body { min-width: 0; flex: 1; }
+  .body h3 { font-size: 16.5px; margin: 0 0 14px; letter-spacing: -.01em; }
+  .body h4 { font-size: 14.5px; margin: 24px 0 10px; color: var(--dim); }
+  .body p { margin: 12px 0; }
+  .body ul, .body ol { margin: 10px 0; padding-left: 22px; }
+  .body li { margin: 5px 0; }
+  .body ol > li { margin: 14px 0; }
+  .body code { font-family: var(--mono); font-size: 13px; }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 22px 0; }
+  table { border-collapse: collapse; margin: 12px 0 18px; font-size: 14.5px; }
+  th, td { padding: 8px 22px 8px 0; text-align: left; }
+  th { color: var(--dim); font-weight: 550; border-bottom: 1px solid var(--rule); }
+  td { border-bottom: 1px solid #f1f2f7; }
+  .sql {
+    margin: 20px 0 0; border: 1px solid var(--rule); border-radius: 9px;
+    padding: 11px 15px; color: var(--dim); font-size: 13.5px;
+    display: flex; align-items: center; gap: 8px; background: #fbfbfe;
+  }
+  .sql .chev { color: var(--faint); font-size: 11px; }
+  .sql .mono {
+    font-family: var(--mono); font-size: 12.5px; color: var(--faint); margin-left: auto;
+  }
+  form {
+    margin: 26px 24px 20px; border: 1px solid var(--rule); border-radius: 13px;
+    padding: 12px 16px; color: var(--faint); font-size: 14.5px;
+    display: flex; align-items: center; background: var(--bg);
+  }
+  form .send {
+    margin-left: auto; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-size: 13px;
+  }
+</style></head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"></div>
+    <div class="brand">AI 분석 어시스턴트<span>검사 데이터베이스 연결됨</span></div>
+  </header>
+  <div class="thread">
+    <div class="ask"><div>라인별로 규격에 아슬아슬한 건수 알려줘</div></div>
+    <div class="reply">
+      <div class="avatar">&#10022;</div>
+      <div class="body">
+<h3>📊 라인별 규격에 아슬아슬한 건수 보고서</h3>
+<h4>1️⃣ 요약</h4>
+<ul>
+<li><strong>L1</strong> 라인에서는 <strong>37건</strong>이 규격 한계에 근접하고 있습니다.</li>
+<li><strong>L2</strong> 라인에서는 <strong>44건</strong>이 규격 한계에 근접하고 있습니다.</li>
+<li><strong>L3</strong> 라인에서도 <strong>44건</strong>이 규격 한계에 근접하고 있습니다.</li>
+<li>전체적으로 L2와 L3 라인의 아슬아슬한 건수가 L1보다 다소 높아, 해당 라인들의 품질 관리에 추가적인 주의가 필요합니다.</li>
+</ul>
+<h4>2️⃣ 상세 표</h4>
+<table>
+<tr><th>라인</th><th>규격에 아슬아슬한 건수</th></tr>
+<tr><td>L1</td><td>37</td></tr>
+<tr><td>L2</td><td>44</td></tr>
+<tr><td>L3</td><td>44</td></tr>
+</table>
+<h4>3️⃣ 권장 후속 조치</h4>
+<ol>
+<li><strong>원인 분석</strong>: 아슬아슬한 건수가 높은 라인(L2, L3)에 대해 최근 공정 변화, 원자재 입고 이력, 설비 점검 기록 등을 검토하여 원인을 파악합니다.</li>
+<li><strong>공정 개선</strong>: 원인으로 파악된 변수(예: 온도, 압력, 작업자 숙련도 등)를 기준으로 공정 매개변수를 재조정하고, 표준 작업 지침을 강화합니다.</li>
+<li><strong>품질 경보 설정</strong>: 아슬아슬한 건수가 일정 수준(예: 30건 이상)으로 누적될 경우 자동 알림이 발생하도록 시스템을 구축합니다.</li>
+<li><strong>추가 검사</strong>: 아슬아슬한 건수에 해당하는 제품에 대해 샘플링 검사를 확대하고, 불합격 시 재작업 또는 폐기 절차를 신속히 진행합니다.</li>
+<li><strong>교육 및 피드백</strong>: 해당 라인 작업자에게 규격 한계와 품질 관리 중요성을 재교육하고, 현장 피드백을 정기적으로 수집해 지속적인 개선에 반영합니다.</li>
+</ol>
+<hr>
+<p><em>위 보고서는 제공해 주신 데이터(라인별 아슬아슬한 건수)만을 기반으로 작성되었습니다. 추가적인 공정 데이터나 품질 지표가 있다면 보다 정밀한 원인 분석과 맞춤형 개선 방안을 제시할 수 있습니다.</em></p>
+        <div class="sql"><span class="chev">&#9654;</span> 실행된 SQL 보기
+          <span class="mono">SELECT line_code, COUNT(*) AS tight_count FROM inspection_re …</span></div>
+      </div>
+    </div>
+  </div>
+  <form>메시지를 입력하세요<div class="send">&#8593;</div></form>
+</div>
+</body></html>

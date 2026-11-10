@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NL2SQL</title>
+<!-- 파비콘도 인라인이다. 외부 요청 0 — 망분리 환경에서 그대로 돈다. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231f5f4b'/%3E%3Cpath d='M3.5 11.5V4.5h1.2l3.6 4.9V4.5h1.2v7h-1.2L4.7 6.6v4.9z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  /* 이 화면이 확인시키려는 것은 결과가 아니라 "질문을 무엇으로 이해했는가"다.
+     그래서 판독 슬립이 응답 안에서 유일하게 테두리를 갖고, 결과보다 위에 온다.
+
+     타입 규칙 하나로 화면 전체를 묶는다.
+       - 산세리프 = 사람이 쓴 말, 인터페이스가 하는 말
+       - 모노스페이스 = 기계가 고른 것 (지표 이름, 저장된 값, 숫자, SQL)
+
+     외부 폰트·스크립트 0. 망분리 제약과 같은 이유다. */
+  :root {
+    --paper:  #f3f4f1;
+    --panel:  #ffffff;
+    --ink:    #16202a;
+    --dim:    #5f6b76;
+    --faint:  #8d97a1;
+    --rule:   #dde1dd;
+    --rule-2: #eceeea;
+
+    /* 경로 색. 시맨틱(가장 신뢰할 수 있는 경로)이 곧 제품의 주색이다. */
+    --mark:  #1f5f4b;
+    --slate: #2f4a6b;
+    --warn:  #8a5510;
+    --stop:  #9c3030;
+
+    --sans: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR",
+            "Malgun Gothic", "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas,
+            "D2Coding", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:  #10151a;
+      --panel:  #171d24;
+      --ink:    #e4e9ec;
+      --dim:    #98a3ad;
+      --faint:  #6d7883;
+      --rule:   #29323b;
+      --rule-2: #202831;
+
+      --mark:  #6fc0a3;
+      --slate: #8fb0d8;
+      --warn:  #d9a25e;
+      --stop:  #e08a8a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  /* 이 줄이 없으면 "경로입니/다." 처럼 조사만 다음 줄로 넘어간다. */
+  html { word-break: keep-all; overflow-wrap: anywhere; }
+
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: var(--paper); color: var(--ink);
+    font: 14.5px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* 라틴은 자간을 벌리면 라벨처럼 서지만 한글은 벌리면 깨져 보인다.
+     한글이 섞이는 라벨이라 자간은 최소로 두고 크기·굵기로 층을 만든다. */
+  .micro {
+    font: 600 11px/1 var(--sans); letter-spacing: .02em; color: var(--faint);
+  }
+  .micro.code { font-family: var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ── 헤더 */
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 0 20px; height: 54px; flex: 0 0 auto;
+    background: var(--panel); border-bottom: 1px solid var(--rule);
+  }
+  header h1 {
+    margin: 0; font-size: 14.5px; font-weight: 650; letter-spacing: -.01em;
+  }
+  header h1 .tag {
+    font: 600 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+    color: var(--mark); border: 1px solid currentColor; border-radius: 3px;
+    padding: 3px 5px; margin-right: 9px; vertical-align: 1px;
+  }
+  /* 지금 붙어 있는 모델. 같은 UI 가 실제 모델로도 스텁으로도 뜨므로 화면이 구별해 줘야 한다.
+     제목이 아니라 지금 붙어 있는 것에 대한 말이라 오른쪽 상태 영역에 둔다.
+     고정 응답이라고 해서 다르게 칠하지 않는다.
+     그 사실은 잠긴 입력창이 훨씬 크게 말하고 있고, 같은 자리의 같은 정보는 같은 모양이어야 한다. */
+  #backend { font: 500 11px/1 var(--mono); color: var(--faint); letter-spacing: .02em; }
+  #backend[hidden] { display: none; }
+  #backend:not([hidden]) { margin-left: auto; }
+  #backend[hidden] + #tenant { margin-left: auto; }
+
+  /* select 와 details>summary 는 기본 스타일이 달라 나란히 두면 어긋난다.
+     같은 컨트롤로 보여야 하니 치수를 한 곳에서 준다. */
+  .control {
+    height: 30px; padding: 0 11px; border: 1px solid var(--rule); border-radius: 6px;
+    background: var(--paper); color: var(--dim);
+    font: 500 12.5px/28px var(--sans); cursor: pointer;
+  }
+  /* select 은 기본 화살표가 테두리에 붙는다. 오른쪽 여백을 따로 준다. */
+  #tenant { padding-right: 7px; }
+  #manual { position: relative; }
+  #manual > summary { list-style: none; display: block; }
+  #manual > summary::-webkit-details-marker { display: none; }
+  /* 열림은 채우고 포커스는 아웃라인으로 둔다. 둘이 구분되어야 한다. */
+  #manual[open] > summary { background: var(--mark); border-color: var(--mark); color: #fff; }
+  @media (prefers-color-scheme: dark) { #manual[open] > summary { color: #10151a; } }
+
+  #manual .sheet {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 480px;
+    max-width: calc(100vw - 32px); padding: 18px 20px;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
+    box-shadow: 0 10px 34px rgba(16, 24, 32, .16);
+  }
+  #manual .sheet h2 { margin: 0 0 12px; }
+  /* 두 절은 같은 층의 내용이므로 같은 형식으로 적고, 사이를 선으로 가른다. */
+  #manual section + section {
+    margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--rule);
+  }
+  /* 라벨(11px)과 설명(13px)은 크기가 달라 위쪽 정렬로 두면 첫 줄이 어긋난다.
+     베이스라인으로 맞추고 첫 열 폭을 고정해 두 절이 같은 세로선에서 시작하게 한다.
+
+     항목 사이(20px)를 문장 사이(2px)보다 압도적으로 크게 둔다.
+     둘이 비슷하면 "묶음 안"과 "묶음 밖"이 구별되지 않아 리듬이 들쭉날쭉해 보인다. */
+  #manual dl {
+    margin: 0; display: grid; grid-template-columns: 118px 1fr;
+    gap: 20px 14px; align-items: baseline;
+  }
+  #manual dt { margin: 0; }
+  /* 설명은 한 문장씩 끊어 읽는다. 붙여 놓으면 항목 간 차이가 안 보인다.
+     문장은 이 폭에서 한 줄에 들어가게 짧게 쓴다.
+     balance 는 그래도 넘칠 때(좁은 화면·큰 글씨) 줄 길이를 고르게 나눈다. */
+  #manual dd { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
+  #manual dd span { display: block; text-wrap: balance; }
+  #manual dd span + span { margin-top: 2px; }
+
+  /* ── 대화 */
+  #chat { flex: 1; overflow-y: auto; padding: 24px 20px 8px; }
+  .stream { max-width: 820px; margin: 0 auto; }
+
+  .msg { display: flex; margin-bottom: 18px; }
+  .msg.user { justify-content: flex-end; }
+  /* 사용자 발화는 짧으니 내용에 맞춘다. */
+  .msg.user .bubble {
+    max-width: 78%; padding: 9px 14px; border-radius: 12px 12px 3px 12px;
+    background: var(--mark); color: #fff;
+  }
+  @media (prefers-color-scheme: dark) { .msg.user .bubble { color: #10151a; font-weight: 500; } }
+
+  /* 응답은 폭을 고정한다. 컨테이너가 흔들리면 막대 길이 비교가 오염된다. */
+  .msg.bot .bubble {
+    width: 100%; max-width: 720px; padding: 14px 18px 15px;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
+    border-left: 3px solid var(--route, var(--rule));
+  }
+  .bubble[data-route=semantic] { --route: var(--mark); }
+  .bubble[data-route=free]     { --route: var(--slate); }
+  .bubble[data-route=clarify]  { --route: var(--warn); }
+  .bubble[data-route=abstain]  { --route: var(--stop); }
+  .bubble[data-route=rejected], .bubble[data-route=error] { --route: var(--stop); }
+
+  .head { display: flex; align-items: baseline; gap: 10px; }
+  .head .route { color: var(--route); }
+  .head .elapsed {
+    margin-left: auto; font: 12px/1 var(--mono);
+    font-variant-numeric: tabular-nums; color: var(--dim);
+  }
+  .note { margin-top: 10px; color: var(--ink); }
+  .note.warn { color: var(--warn); font-weight: 500; }
+
+  /* ── 판독 슬립
+     응답 안에서 테두리를 가진 유일한 블록이고, 결과보다 위에 온다. */
+  .reading { margin-top: 12px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--rule); }
+  /* 라벨과 첫 항목이 붙으면 라벨이 목록의 일부처럼 읽힌다.
+     사이를 벌려 제목과 내용이 한눈에 갈리게 한다. */
+  .reading > .micro { display: block; padding: 9px 0 9px; color: var(--dim); }
+  .reading ul { list-style: none; margin: 0; padding: 0 0 11px; }
+  .reading li {
+    position: relative; padding: 4px 0 4px 15px; font-size: 13.5px; line-height: 1.6;
+  }
+  .reading li::before {
+    content: ""; position: absolute; left: 0; top: 13px;
+    width: 7px; height: 1px; background: var(--faint);
+  }
+  .reading code {
+    font: 12.5px/1 var(--mono); color: var(--route, var(--mark));
+    background: var(--rule-2); border-radius: 3px; padding: 2px 4px;
+  }
+  .amend {
+    display: block; margin-left: auto; margin-bottom: 8px;
+    background: none; border: none; padding: 0;
+    font: 500 12.5px var(--sans); color: var(--route, var(--mark)); cursor: pointer;
+  }
+  .amend:hover { text-decoration: underline; }
+
+  /* ── 결과 */
+  /* 라벨 열을 비율(%)로 잡으면 라벨이 짧을 때 왼쪽이 통째로 빈다.
+     grid 의 auto 열은 가장 긴 라벨에 맞춰 줄어들어 막대가 남는 폭을 다 쓴다. */
+  .chart { margin-top: 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; }
+  .chart-row { display: contents; font-size: 13px; }
+  .chart-label {
+    text-align: right; font-size: 13px; align-self: center;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch;
+  }
+  .chart-track { height: 11px; background: var(--rule-2); border-radius: 2px; align-self: center; }
+  .chart-bar { height: 100%; background: var(--route, var(--mark)); border-radius: 0 2px 2px 0; min-width: 2px; }
+  .chart-bar.neg { background: var(--stop); }
+  .chart-value {
+    font: 12.5px/1 var(--mono); font-variant-numeric: tabular-nums;
+    color: var(--dim); text-align: right; align-self: center; white-space: nowrap;
+  }
+
+  table { border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  /* 셀을 접으면 컬럼 이름이 ITEM_NAM/E 처럼 쪼개지고 긴 소수가 두 줄이 된다.
+     자르거나 반올림하면 값을 왜곡하는 것이라, 접지 말고 가로로 흘린다. */
+  th, td { border-bottom: 1px solid var(--rule); padding: 6px 12px 6px 0; text-align: left; white-space: nowrap; }
+  /* 대문자 변환은 실제 컬럼 이름이 아닌 것을 보여주게 된다. 이름은 이름대로 둔다. */
+  th { font: 600 11.5px/1.6 var(--mono); color: var(--dim); }
+  td { font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; max-width: 100%; }
+  .peek-note { margin-top: 6px; font-size: 12px; color: var(--faint); }
+
+  pre {
+    margin: 8px 0 0; padding: 12px; overflow-x: auto;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+    font: 12.5px/1.6 var(--mono); color: var(--ink);
+  }
+
+  /* 부가 정보는 한 줄에 모은다. 가정을 사이에 두고 흩어지면 안 된다.
+     <details> 를 쓰면 펼친 것만 제 줄로 빠져나가 토글 줄이 재배치된다.
+     그래서 토글 줄과 내용 영역을 분리한다. 펼치든 접든 토글은 제자리다. */
+  .footer { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--rule-2); }
+  .tabs { display: flex; align-items: stretch; gap: 4px; }
+  .tab {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    padding: 3px 10px 6px; font: 500 12.5px var(--sans);
+    color: var(--dim); cursor: pointer;
+  }
+  .tab[aria-selected="true"] { color: var(--route, var(--ink)); border-bottom-color: currentColor; }
+  .tab:hover { color: var(--ink); }
+  .tabs .count { margin-left: auto; align-self: center; font: 12px/1 var(--mono); color: var(--faint); }
+  .panels > *:not([hidden]) { margin-top: 12px; }
+  .panels pre { max-width: 100%; }
+
+  /* ── 되묻기 선택지 */
+  .options { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .options button {
+    padding: 7px 13px; border: 1px solid var(--warn); border-radius: 6px;
+    background: none; color: var(--warn); font: 500 13px var(--sans); cursor: pointer;
+  }
+  .options button:hover:not(:disabled) { background: var(--warn); color: var(--panel); }
+  .options button:disabled { border-color: var(--rule); color: var(--faint); cursor: default; }
+  .options .none { border-style: dashed; border-color: var(--rule); color: var(--dim); }
+  .options .none:hover:not(:disabled) { background: none; border-color: var(--dim); color: var(--ink); }
+
+  /* ── 빈 화면 = 사용설명서 */
+  /* 쪼갤 수 있는 줄. 누를 수 있다는 것이 보여야 하지만 표를 시끄럽게 만들면 안 된다. */
+  tr.drillable { cursor: pointer; }
+  tr.drillable:hover td { background: var(--rule-2); }
+  .chart-row.drillable { cursor: pointer; border-radius: 4px; }
+  .chart-row.drillable:hover { background: var(--rule-2); }
+
+  .empty { max-width: 560px; margin: 6vh auto 0; }
+  /* 제품이 무엇을 하는지 말하는 자리다.
+     아래 예시 목록과 크기가 같으면 한 덩어리로 읽혀 문단이 안 읽힌다. */
+  .empty p { margin: 0 0 30px; color: var(--ink); font-size: 17px; line-height: 1.65; }
+  .empty p span { display: block; }
+  .empty p span + span { color: var(--dim); font-size: 15px; }
+  .empty p b { color: var(--ink); font-weight: 650; }
+  .empty .micro { display: block; margin-bottom: 8px; }
+  .empty ol { list-style: none; margin: 0; padding: 0; }
+  .empty li { border-top: 1px solid var(--rule); }
+  .empty li:last-child { border-bottom: 1px solid var(--rule); }
+  .empty li button {
+    display: block; width: 100%; padding: 11px 2px; border: none; background: none;
+    text-align: left; font: 14px var(--sans); color: var(--ink); cursor: pointer;
+  }
+  .empty li button:hover { color: var(--mark); }
+
+  /* ── 입력 */
+  /* 고정 응답으로 띄웠을 때. 화면 모양은 그대로 두고 편집만 막는다.
+     입력 자리를 없애면 UI가 딴 제품처럼 보이고, 그대로 두면 아무거나 쳐 보게 된다.
+     질문을 미리 넣어 두고 못 고치게 하는 것이 둘 다 피한다. */
+  form.locked #input { cursor: default; background: var(--rule-2); }
+  form.locked #input:focus { border-color: var(--rule); }
+
+  form { flex: 0 0 auto; padding: 14px 20px 18px; background: var(--panel); border-top: 1px solid var(--rule); }
+  form .inner { display: flex; gap: 10px; max-width: 820px; margin: 0 auto; }
+  #input {
+    flex: 1; height: 42px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 8px;
+    background: var(--paper); color: var(--ink); font: 15px var(--sans); outline: none;
+  }
+  #input:focus { border-color: var(--mark); }
+  #send {
+    height: 42px; padding: 0 20px; border: none; border-radius: 8px;
+    background: var(--mark); color: #fff; font: 600 14px var(--sans); cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) { #send { color: #10151a; } }
+  #send:disabled { opacity: .45; cursor: default; }
+
+  .waiting { display: flex; align-items: center; gap: 9px; color: var(--dim); font-size: 13.5px; }
+  .waiting .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mark); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+  @media (max-width: 620px) {
+    .chart-label { flex-basis: 42%; max-width: 42%; }
+    #manual .sheet { width: calc(100vw - 32px); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="title"><span class="tag">NL2SQL</span><span id="title-text">계측·규격검사</span></h1>
+  <span id="backend" hidden></span>
+  <select id="tenant" class="control" title="자동 주입 컨텍스트" hidden></select>
+  <details id="manual">
+    <summary class="control">동작 방식</summary>
+    <div class="sheet">
+      <section>
+      <h2 class="micro">질문은 네 갈래로 나뉩니다</h2>
+      <dl>
+        <dt><span class="micro" style="color:var(--mark)">시맨틱 레이어</span></dt>
+        <dd><span>정의된 지표 × 차원 × 필터로 표현되는 질문입니다.</span>
+            <span>모델은 이름만 고르고 SQL은 컴파일러가 만듭니다.</span>
+            <span>가장 신뢰할 수 있는 경로입니다.</span></dd>
+        <dt><span class="micro" style="color:var(--slate)">SQL 직접 생성</span></dt>
+        <dd><span>시맨틱 레이어 밖의 탐색적 질문입니다.</span>
+            <span>모델이 SQL을 직접 씁니다.</span>
+            <span>정적 검증 → 비용 가드 → 읽기전용 실행을 거칩니다.</span></dd>
+        <dt><span class="micro" style="color:var(--warn)">되묻기</span></dt>
+        <dd><span>답할 수는 있으나 답이 하나로 안 좁혀집니다.</span>
+            <span>추측해서 실행하지 않습니다.</span>
+            <span>고를 수 있는 후보를 함께 냅니다.</span></dd>
+        <dt><span class="micro" style="color:var(--stop)">답변 거절</span></dt>
+        <dd><span>가진 데이터로 답할 수 없는 질문입니다.</span>
+            <span>못 한다고 말합니다.</span></dd>
+      </dl>
+      </section>
+      <section>
+      <h2 class="micro">답은 이 순서로 나옵니다</h2>
+      <dl>
+        <dt><span class="micro" style="color:var(--ink)">해석 가정</span></dt>
+        <dd><span>질문을 무엇으로 이해했는지 밝힙니다.</span>
+            <span>SQL이 정상이어도 답은 틀릴 수 있습니다.</span>
+            <span>그래서 결과보다 이 블록을 먼저 봅니다.</span></dd>
+        <dt><span class="micro" style="color:var(--ink)">경고</span></dt>
+        <dd><span>결과가 0행이거나 행수 상한에 걸리면 알립니다.</span>
+            <span>잘린 결과를 전체로 믿지 않게 합니다.</span></dd>
+        <dt><span class="micro" style="color:var(--ink)">결과</span></dt>
+        <dd><span>두 열이면 막대로, 아니면 표로 보여줍니다.</span></dd>
+        <dt><span class="micro" style="color:var(--ink)">표 및 SQL</span></dt>
+        <dd><span>전체 표는 접어 둡니다.</span>
+            <span>긴 목록은 아무도 읽지 않기 때문입니다.</span>
+            <span>SQL은 사후 조사를 위해 남겨 둡니다.</span></dd>
+      </dl>
+      </section>
+    </div>
+  </details>
+</header>
+
+<div id="chat"><div class="stream" id="stream"></div></div>
+
+<form id="form">
+  <div class="inner">
+    <input id="input" type="text" placeholder="무엇이 궁금하신가요" autocomplete="off" autofocus>
+    <button id="send" type="submit">보내기</button>
+  </div>
+</form>
+
+<script>
+const stream = document.getElementById("stream");
+const chat = document.getElementById("chat");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+const tenant = document.getElementById("tenant");
+
+// 제목 앞의 "NL2SQL — " 접두어를 지운다.
+// 수량자를 {0,} 로 적은 것은 취향이 아니라 필요다.
+// 별표로 적으면 정규식 리터럴이 블록주석 닫는 기호로 끝나 문법 강조가 어긋난다.
+const TITLE_PREFIX = /^NL2SQL\s{0,}[—-]\s{0,}/;
+
+const ROUTE_LABEL = {
+  semantic: "시맨틱 레이어", free: "SQL 직접 생성",
+  clarify: "되묻기", abstain: "답변 거절",
+};
+const STATUS_LABEL = { rejected: "가드 거부", error: "오류" };
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function scroll() { chat.scrollTop = chat.scrollHeight; }
+
+// 기계가 고른 말은 모노로 세운다. 화면 전체를 관통하는 타입 규칙이다.
+//
+// 표시를 두 갈래로 보는 이유가 있다.
+// 시맨틱 경로의 가정은 컴파일러가 정의에서 읽어 만들어 이름이 따옴표로 감싸여 온다.
+// 직접 생성 경로의 가정은 모델이 쓴 문장이라 그런 표시가 없다.
+//
+// 그래서 따옴표를 먼저 보고, 남은 텍스트는 /api/meta 의 vocabulary 와 직접 대조한다.
+// 모델이 잘 감싸 주기를 바라지 않고 화면이 아는 것으로 판단한다.
+let VOCABULARY = new Set();
+
+function markVocabulary(text, into) {
+  for (const token of String(text).split(/([A-Za-z_][A-Za-z0-9_]*)/)) {
+    if (!token) continue;
+    if (VOCABULARY.has(token)) into.appendChild(el("code", null, token));
+    else into.appendChild(document.createTextNode(token));
+  }
+}
+
+function withVocabulary(sentence) {
+  const node = el("span");
+  const parts = String(sentence).split(/'([^']+)'/);
+  parts.forEach((part, i) => {
+    if (i % 2) node.appendChild(el("code", null, part));       // 컴파일러가 감쌌다
+    else if (part) markVocabulary(part, node);                 // 모델이 쓴 자리
+  });
+  return node;
+}
+
+let lastQuestion = "";
+
+function addUser(text) {
+  const msg = el("div", "msg user");
+  msg.appendChild(el("div", "bubble", text));
+  stream.appendChild(msg);
+  scroll();
+}
+
+function addBot(answer) {
+  const msg = el("div", "msg bot");
+  const bubble = el("div", "bubble");
+  const route = answer.route || answer.status;
+  bubble.dataset.route = STATUS_LABEL[answer.status] ? answer.status : route;
+
+  const head = el("div", "head");
+  head.appendChild(el("span", "micro route",
+    STATUS_LABEL[answer.status] || ROUTE_LABEL[answer.route] || answer.status));
+  if (typeof answer.elapsed_ms === "number")
+    head.appendChild(el("span", "elapsed", (answer.elapsed_ms / 1000).toFixed(1) + "s"));
+  bubble.appendChild(head);
+
+  // 되묻기·거절·오류의 메시지는 그 자체가 답이므로 맨 위에 온다.
+  // 성공한 답에 붙은 메시지는 0행·잘림 경고라 결과에 대한 말이다.
+  // 그건 해석 가정 아래, 결과 바로 위에 둔다. 슬립이 첫 번째 자리를 지킨다.
+  const warning =
+    answer.message && el("div", "note" + (answer.status === "ok" ? " warn" : ""), answer.message);
+  if (warning && answer.status !== "ok") bubble.appendChild(warning);
+
+  // 판독 슬립. 사용자가 확인할 수 있는 유일한 지점이라 결과보다 위에 온다.
+  if (answer.assumptions && answer.assumptions.length) {
+    const box = el("div", "reading");
+    box.appendChild(el("span", "micro", "해석 가정"));
+    const ul = el("ul");
+    for (const a of answer.assumptions) {
+      const li = el("li");
+      li.appendChild(withVocabulary(a));
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+    // "틀리면 바로잡아 주세요"라고 써 놓고 수단이 없으면 그건 거짓말이다.
+    // 원문을 입력창에 되돌려 놓아 실제로 고칠 수 있게 한다.
+    if (lastQuestion) {
+      const amend = el("button", "amend", "이게 아니라면, 질문 고치기 →");
+      amend.type = "button";
+      amend.addEventListener("click", () => {
+        input.value = lastQuestion;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+      box.appendChild(amend);
+    }
+    bubble.appendChild(box);
+  }
+
+  // 되묻기의 선택지는 자유 텍스트가 아니라 지표·차원으로 받는다.
+  // 자유 텍스트로 답하면 첫 질문이 확정한 축이 사라지기 때문이다.
+  if (answer.options && answer.options.length) {
+    const wrap = el("div", "options");
+    const lock = () => wrap.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    for (const opt of answer.options) {
+      const b = el("button", null, opt.label);
+      b.type = "button";
+      b.addEventListener("click", () => { lock(); ask(opt.label, opt.query); }, { once: true });
+      wrap.appendChild(b);
+    }
+    // 후보를 만든 것은 모델이라 전부 빗나갈 수 있다.
+    // 탈출구가 없으면 사용자는 틀린 선택지 안에서 고르게 되고, 그것이 확정된 의도가 된다.
+    const none = el("button", "none", "이 중에 없습니다");
+    none.type = "button";
+    none.addEventListener("click", () => {
+      lock();
+      input.value = lastQuestion;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, { once: true });
+    wrap.appendChild(none);
+    bubble.appendChild(wrap);
+  }
+
+  if (warning && answer.status === "ok") bubble.appendChild(warning);
+
+  if (answer.guard_violations && answer.guard_violations.length) {
+    const box = el("div", "reading");
+    box.appendChild(el("span", "micro", "차단 사유"));
+    const ul = el("ul");
+    for (const v of answer.guard_violations) ul.appendChild(el("li", null, v));
+    box.appendChild(ul);
+    bubble.appendChild(box);
+  }
+
+  const footer = el("div", "footer");
+  const tabs = el("div", "tabs");
+  const panels = el("div", "panels");
+
+  // 탭이라 한 번에 하나만 열린다.
+  // 둘 다 펼치면 응답이 두 배로 길어져 판독 슬립이 화면 밖으로 밀려난다.
+  function addPanel(label, content) {
+    const btn = el("button", "tab", label);
+    btn.type = "button";
+    btn.setAttribute("aria-selected", "false");
+    content.hidden = true;
+    btn.addEventListener("click", () => {
+      const open = btn.getAttribute("aria-selected") === "true";
+      tabs.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", "false"));
+      panels.querySelectorAll(":scope > *").forEach((x) => (x.hidden = true));
+      if (!open) {
+        btn.setAttribute("aria-selected", "true");
+        content.hidden = false;
+      }
+    });
+    tabs.appendChild(btn);
+    panels.appendChild(content);
+  }
+
+  if (answer.status === "ok" && answer.columns.length && answer.rows.length) {
+    const chart = renderBarChart(answer);
+    if (chart) bubble.appendChild(chart);
+
+    // 차트를 못 그리면 표가 유일한 시각이다.
+    // 그렇다고 50행을 펼쳐 두면 응답 하나가 화면을 삼킨다.
+    // 맛보기만 펼치고 나머지는 접는다.
+    if (!chart) {
+      const peek = el("div", "scroll");
+      peek.appendChild(buildTable(answer, PEEK_ROWS));
+      bubble.appendChild(peek);
+      if (answer.rows.length > PEEK_ROWS)
+        bubble.appendChild(el("div", "peek-note", `상위 ${PEEK_ROWS}행만 폈습니다.`));
+    }
+    const wrap = el("div", "scroll");
+    wrap.appendChild(buildTable(answer, TABLE_ROWS));
+    addPanel(chart ? "표로 보기" : `표 전체 (${Math.min(answer.rows.length, TABLE_ROWS)}행)`, wrap);
+  }
+
+  // 차단된 답의 SQL 은 실행된 적이 없다. 라벨이 그것을 말해야 한다.
+  // 무엇이 막혔는지 보려면 SQL 자체는 필요하므로 감추지는 않는다.
+  if (answer.sql) {
+    let sql = answer.sql;
+    if (answer.params && answer.params.length)
+      sql += "\n-- params: " + JSON.stringify(answer.params);
+    addPanel(answer.status === "ok" ? "실행된 SQL" : "생성된 SQL", el("pre", null, sql));
+  }
+
+  if (answer.status === "ok" && answer.rows)
+    tabs.appendChild(el("span", "count", answer.rows.length + "행"));
+
+  if (tabs.childElementCount) {
+    footer.appendChild(tabs);
+    if (panels.childElementCount) footer.appendChild(panels);
+    bubble.appendChild(footer);
+  }
+
+  msg.appendChild(bubble);
+  stream.appendChild(msg);
+  scroll();
+}
+
+const PEEK_ROWS = 5;    // 차트가 없을 때 펼쳐 두는 맛보기
+const TABLE_ROWS = 50;  // 접힌 표에 담는 상한
+const DIGITS = 6;       // 표시용 유효숫자
+
+// 표시용 숫자 포맷.
+//
+// 시맨틱 경로의 지표는 정의가 SQL 안에서 반올림한다.
+// 직접 생성 경로는 모델이 SQL 을 쓰므로 그 자리가 없고, 배정밀도가 그대로 올라온다.
+// 0.026366984457422967 을 사람에게 읽히면 유효숫자가 아니라 잡음을 읽히는 것이다.
+//
+// 프롬프트로 시키지 않고 여기서 자른다. 표시는 하네스가 보증할 수 있는 자리다.
+// 자르는 것은 표시뿐이고 원래 값은 툴팁과 SQL 패널에 그대로 남는다.
+function fmt(value) {
+  // 값이 없는 칸에 "null" 을 적으면 사용자는 그것을 값으로 읽는다.
+  // 한쪽 한계만 있는 항목(절연저항의 상한 등)은 반대쪽이 비어 있는 것이 정상이다.
+  if (value === null || value === undefined) return "—";
+  if (typeof value !== "number" || !Number.isFinite(value)) return String(value);
+  if (Number.isInteger(value)) return String(value);
+  return String(Number(value.toPrecision(DIGITS)));
+}
+
+function buildTable(answer, limit) {
+  const table = el("table");
+  const thead = el("tr");
+  for (const c of answer.columns) thead.appendChild(el("th", null, c));
+  table.appendChild(thead);
+  // 한 줄을 누르면 그 줄에 해당하는 측정이 열린다.
+  // "3건"에서 끝나면 사용자는 아무것도 못 한다. 다음 질문은 언제나 "그 3건이 뭔데"다.
+  const drill = answer.drill;
+  for (const row of answer.rows.slice(0, limit)) {
+    const tr = el("tr");
+    for (const cell of row) tr.appendChild(el("td", null, fmt(cell)));
+    // 값이 0인 줄은 열 것이 없다.
+    // 누를 수 있다고 해 놓고 빈 표가 뜨면 그다음부터 아무도 안 누른다.
+    if (drill && Number(row[row.length - 1]) !== 0) {
+      tr.className = "drillable";
+      tr.title = drill.label;
+      tr.addEventListener("click", () => drillInto(drill, row));
+    }
+    table.appendChild(tr);
+  }
+  return table;
+}
+
+// 누른 줄의 차원 값을 필터로 굳혀 그 줄에 해당하는 측정을 그대로 연다.
+// 신뢰 경계 바깥에서 만든 질의지만 컴파일러가 정의를 다시 검증하므로 되묻기 선택지와 같은 급이다.
+function drillInto(drill, row) {
+  const query = JSON.parse(JSON.stringify(drill.query));
+  const picked = drill.by.map((dimension, i) => {
+    query.filters.push({ dimension, op: "=", value: String(row[i]) });
+    return String(row[i]);
+  });
+  ask(`${picked.join(" · ")} 해당 건`, query);
+}
+
+// (라벨, 수치) 2컬럼 결과를 막대 목록으로 그린다.
+// 단일 시리즈 1색, 음수만 구분색. 외부 라이브러리 없음.
+function renderBarChart(answer) {
+  if (answer.columns.length !== 2) return null;
+  const rows = answer.rows.slice(0, 40);
+  if (rows.length < 2) return null;
+  const values = rows.map((r) => Number(r[1]));
+  if (!values.every(Number.isFinite)) return null;
+  const max = Math.max(...values.map(Math.abs));
+  if (!(max > 0)) return null;
+
+  // 차트가 기본 화면이라 여는 동작도 여기 붙어야 한다. 표는 접혀 있어 거기에만 달면 못 찾는다.
+  const drill = answer.drill;
+  const wrap = el("div", "chart");
+  rows.forEach((row, i) => {
+    const line = el("div", "chart-row");
+    line.title = drill && values[i] !== 0
+      ? drill.label
+      : `${answer.columns[0]}: ${row[0]} — ${answer.columns[1]}: ${row[1]}`;
+    if (drill && values[i] !== 0) {
+      line.className = "chart-row drillable";
+      line.addEventListener("click", () => drillInto(drill, row));
+    }
+    line.appendChild(el("span", "chart-label", String(row[0])));
+    const track = el("div", "chart-track");
+    const bar = el("div", "chart-bar" + (values[i] < 0 ? " neg" : ""));
+    bar.style.width = ((Math.abs(values[i]) / max) * 100).toFixed(1) + "%";
+    track.appendChild(bar);
+    line.appendChild(track);
+    line.appendChild(el("span", "chart-value", fmt(row[1])));
+    wrap.appendChild(line);
+  });
+  return wrap;
+}
+
+let waiting = null;
+function showWaiting() {
+  waiting = el("div", "msg bot");
+  const bubble = el("div", "bubble");
+  const row = el("div", "waiting");
+  row.appendChild(el("span", "dot"));
+  row.appendChild(el("span", null, "읽는 중"));
+  bubble.appendChild(row);
+  waiting.appendChild(bubble);
+  stream.appendChild(waiting);
+  scroll();
+}
+function hideWaiting() { if (waiting) { waiting.remove(); waiting = null; } }
+
+async function ask(question, resolution) {
+  const empty = document.getElementById("empty");
+  if (empty) empty.remove();
+  if (!resolution) lastQuestion = question;
+
+  addUser(question);
+  send.disabled = true;
+  showWaiting();
+  try {
+    const body = { question };
+    if (tenant.value) body.tenant_id = tenant.value;
+    if (resolution) body.resolution = resolution;
+    const res = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    addBot(await res.json());
+  } catch (e) {
+    addBot({ status: "error", route: null, message: "요청이 실패했습니다 — " + e.message,
+             columns: [], rows: [], assumptions: [], guard_violations: [] });
+  } finally {
+    hideWaiting();
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (!q) return;
+  // 고정 응답 데모에서는 비우지 않는다. 비우면 다시 보낼 방법이 사라진다.
+  if (!input.readOnly) input.value = "";
+  ask(q);
+});
+
+// 빈 화면이 곧 사용설명서다. 예시는 여기에만 두고 대화가 시작되면 사라진다.
+// 입력창 위에 늘 띄워 두면 두 줄을 영구 점유하면서 아무도 안 읽는다.
+function renderEmpty(questions) {
+  const box = el("div", "empty");
+  box.id = "empty";
+  const p = el("p");
+  p.appendChild(el("span", null, "질문을 SQL로 옮겨 실행합니다."));
+  const second = el("span");
+  second.append("결과보다 먼저 ");
+  second.appendChild(el("b", null, "질문을 무엇으로 이해했는지"));
+  second.append("를 보여줍니다.");
+  p.appendChild(second);
+  p.appendChild(el("span", null, "틀렸다면 그 자리에서 바로잡을 수 있습니다."));
+  box.appendChild(p);
+  // 목록이 비면 라벨도 안 낸다.
+  // 고정 응답으로 띄우면 같은 질문이 입력창 자리에 이미 버튼으로 있어서 두 번 나온다.
+  if (!questions.length) {
+    stream.appendChild(box);
+    return;
+  }
+  box.appendChild(el("span", "micro", "이렇게 물어보세요"));
+  const ol = el("ol");
+  for (const q of questions) {
+    const li = el("li");
+    const b = el("button", null, q);
+    b.type = "button";
+    b.addEventListener("click", () => ask(q));
+    li.appendChild(b);
+    ol.appendChild(li);
+  }
+  box.appendChild(ol);
+  stream.appendChild(box);
+}
+
+// 프로파일 메타데이터로 UI 초기화 (제목·예시 질문·컨텍스트 선택지)
+async function init() {
+  let meta = null;
+  try { meta = await (await fetch("/api/meta")).json(); } catch (e) { /* 기본 UI 유지 */ }
+  if (!meta) return;
+
+  document.getElementById("title-text").textContent = meta.title.replace(TITLE_PREFIX, "");
+  document.title = meta.title;
+  VOCABULARY = new Set(meta.vocabulary || []);
+
+  // 어느 모델과 말하고 있는지 화면에 남긴다.
+  // 고정 응답으로 띄운 데모는 질문을 바꿔도 같은 답이 나오는데, 표시가 없으면 그것을 알 수 없다.
+  if (meta.backend) {
+    const badge = document.getElementById("backend");
+    badge.hidden = false;
+    badge.textContent = meta.backend;
+    badge.title = meta.live === false
+      ? "고정 응답입니다. 실제 모델이 붙어 있지 않아 질문과 무관하게 같은 답이 나옵니다."
+      : "지금 붙어 있는 모델";
+  }
+
+  // 고정 응답이면 자유 입력을 잠근다.
+  //
+  // 라벨만 붙여 두면 사람은 일단 쳐 본다. 그리고 무엇을 치든 같은 표가 나온다.
+  // 그때 화면은 "이 질문에 이렇게 답했다"로 읽히고, 그 읽기는 거짓이다.
+  // 물어볼 수 없게 만드는 것이 적어 두는 것보다 싸고 확실하다.
+  if (meta.live === false) {
+    const form = document.getElementById("form");
+    const box = document.getElementById("input");
+    form.classList.add("locked");
+    // readOnly 는 disabled 와 달리 값이 그대로 제출된다. 보내기 버튼도 살아 있다.
+    box.readOnly = true;
+    box.value = (meta.example_questions || [])[0] || "";
+    box.title = "고정 응답 데모입니다. 질문을 고칠 수 없습니다.";
+  }
+  renderEmpty(meta.example_questions);
+
+  if (meta.context) {
+    tenant.hidden = false;
+    tenant.title = `${meta.context.label} (자동 주입 컨텍스트)`;
+    // (없음)이 기본값이다. 실제 배포에서는 세션이 컨텍스트를 갖고 있다.
+    // 여기서 특정 라인이 미리 골라져 있으면 모든 질문이 조용히 좁혀진다.
+    // "라인별 비교"를 눌렀는데 한 줄만 나오는 식이다.
+    const none = el("option", null, `${meta.context.label}: (없음)`);
+    none.value = "";
+    tenant.replaceChildren(none, ...meta.context.options.map((v) => {
+      const opt = el("option", null, `${meta.context.label}: ${v}`);
+      opt.value = v;
+      return opt;
+    }));
+  }
+}
+init();
+</script>
+</body>
+</html>

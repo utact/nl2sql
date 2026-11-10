@@ -1,0 +1,29 @@
+# Secrets. .env.example is committed.
+.env
+
+# Produced by running it: seeded databases, logs, audit trail.
+*.db
+*.sqlite3
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Editors and agents
+.claude/
+.idea/
+.vscode/
+
+# Local scratch
+local/

@@ -1,0 +1,10 @@
+# 저장소 안에서는 항상 LF로 보관한다.
+# 체크아웃 시 플랫폼 변환도 하지 않는다 — 협업자 간 줄바꿈 diff를 없앤다.
+* text=auto eol=lf
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.toml text eol=lf
+*.sh   text eol=lf
+*.json text eol=lf
+*.sql  text eol=lf

@@ -1,0 +1,80 @@
+{
+  "meta/llama-3.1-8b-instruct": {
+    "naive": {
+      "ok": 23,
+      "loud": 0,
+      "quiet": 47
+    },
+    "ours": {
+      "ok": 30,
+      "loud": 40,
+      "quiet": 0
+    },
+    "quiet_questions": {},
+    "seconds": 709.3,
+    "backend": "nvidia",
+    "runs": 5,
+    "questions": 14,
+    "measured_at": "2026-08-20T11:14:09"
+  },
+  "openai/gpt-oss-20b": {
+    "naive": {
+      "ok": 35,
+      "loud": 1,
+      "quiet": 34
+    },
+    "ours": {
+      "ok": 69,
+      "loud": 0,
+      "quiet": 1
+    },
+    "quiet_questions": {
+      "요즘 문제 있는 라인 알려줘": 1
+    },
+    "seconds": 520.7,
+    "backend": "nvidia",
+    "runs": 5,
+    "questions": 14,
+    "measured_at": "2026-08-20T11:14:09"
+  },
+  "meta/llama-3.1-70b-instruct": {
+    "naive": {
+      "ok": 17,
+      "loud": 31,
+      "quiet": 22
+    },
+    "ours": {
+      "ok": 48,
+      "loud": 19,
+      "quiet": 3
+    },
+    "quiet_questions": {
+      "이번 달 상태 어때?": 3
+    },
+    "seconds": 1570.9,
+    "backend": "nvidia",
+    "runs": 5,
+    "questions": 14,
+    "measured_at": "2026-08-20T11:14:09"
+  },
+  "openai/gpt-oss-120b": {
+    "naive": {
+      "ok": 30,
+      "loud": 0,
+      "quiet": 40
+    },
+    "ours": {
+      "ok": 68,
+      "loud": 0,
+      "quiet": 2
+    },
+    "quiet_questions": {
+      "품질 안 좋은 항목 알려줘": 2
+    },
+    "seconds": 315.6,
+    "backend": "nvidia",
+    "runs": 5,
+    "questions": 14,
+    "measured_at": "2026-08-20T11:14:09"
+  }
+}

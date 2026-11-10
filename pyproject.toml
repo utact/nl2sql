@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nl2sql"
+version = "0.1.0"
+description = "실전 NL2SQL"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = [
+    # 하한이 곧 가드의 범위다 — ast_guard 가 금지하는 노드 열다섯 개가 다 있는 첫 판이 25.32 다.
+    "sqlglot>=25.32",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+# PostgreSQL 백엔드로 붙일 때만 필요하다. 기본 데모는 SQLite 로 돈다.
+postgres = ["psycopg[binary]>=3.2"]
+# 외부 API 대신 로컬 가중치를 쓸 때만 필요하다.
+local-llm = ["transformers>=4.44", "torch>=2.4"]
+# 호스팅 API 백엔드로 붙일 때만 필요하다. 로컬 가중치를 받지 않는다.
+api = ["httpx>=0.27"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+include = ["nl2sql*", "domain*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 저장소 루트를 import 경로에 올린다.
+#
+# `python -m pytest` 는 cwd 를 sys.path 에 넣어 주지만 `pytest` 는 안 넣는다.
+# 그런데 설치되는 패키지는 nl2sql·domain 뿐이라(setuptools.packages.find),
+# demo·app 을 import 하는 테스트가 호출 방식에 따라 있다 없다 한다.
+# 둘 다 같은 결과를 내야 CI 와 손으로 돌린 것이 같은 것을 말한다.
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

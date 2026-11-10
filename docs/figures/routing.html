@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>네 갈래 — 라우팅</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+  /* 되묻기에서 시맨틱 레이어로 돌아가는 선은 뺐다.
+     색은 app/static/index.html 의 갈래 색을 따른다.
+
+     선을 직교로 꺾는 이유.
+     베지에 부채살은 세로 낙차가 가로 여유의 세 배라 곡률이 끝에 몰린다.
+     그러면 화살촉만 수평으로 서서 선에서 떨어져 보인다.
+     촉 색은 선 색을 받는다. 회색 하나로 돌려쓰면 촉 밑으로 선이 삐져나온다.
+     네 갈래는 나가는 높이도 꺾는 열도 서로 다르다. 겹치지 않게.
+     선 끝은 상자 변에 닿게 둔다. 촉이 뾰족해서 몇 단위 여백도 벌어져 보인다. */
+  :root {
+    --ink:#16202a; --dim:#5f6b76; --faint:#98a2ab; --rule:#d6dbd7;
+    --mark:#1f5f4b; --slate:#2f4a6b; --warn:#8a5510; --stop:#9c3030;
+    --band:#f1f3f1;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; background:#fff; }
+  body { font-family:"Noto Sans KR","Apple SD Gothic Neo",sans-serif; color:var(--ink); }
+  #stage { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+  svg { width:94vw; max-height:94vh; height:auto; display:block; }
+
+  .node { font-size:32px; font-weight:700; }
+  .cond { font-size:22px; font-weight:500; }
+  .band { font-size:22px; font-weight:700; }
+  .leg  { font-size:19px; fill:var(--dim); }
+  .flow { fill:none; stroke-width:2.5; }
+</style>
+</head>
+<body>
+<div id="stage">
+<svg viewBox="0 0 1440 716" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="질문이 라우터를 지나 시맨틱 레이어, SQL 직접 생성, 되묻기, 거절 네 갈래로 갈리는 구조도">
+  <defs>
+    <!-- 사람이 미리 쓴 것. 검정(LLM)도 흰색(코드)도 아니라서 셋째 표기가 필요하다.
+         해치로 둔 이유는 투사와 흑백 인쇄에서 둘 다 살아남기 때문이다.
+         옅은 회색 면으로 하면 --band 와 섞이고 프로젝터에서 흰색으로 날아간다. -->
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#fff"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#c3ccd2" stroke-width="3"/>
+    </pattern>
+
+    <!-- 갈래마다 촉 색이 다르다. 하나로 돌려쓰면 선과 촉이 어긋난 것으로 읽힌다. -->
+    <marker id="ar-dim"   viewBox="0 0 12 12" refX="11" refY="6" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1,1.5 L11,6 L1,10.5 z" fill="#5f6b76"/></marker>
+    <marker id="ar-mark"  viewBox="0 0 12 12" refX="11" refY="6" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1,1.5 L11,6 L1,10.5 z" fill="#1f5f4b"/></marker>
+    <marker id="ar-slate" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1,1.5 L11,6 L1,10.5 z" fill="#2f4a6b"/></marker>
+    <marker id="ar-warn"  viewBox="0 0 12 12" refX="11" refY="6" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1,1.5 L11,6 L1,10.5 z" fill="#8a5510"/></marker>
+    <marker id="ar-stop"  viewBox="0 0 12 12" refX="11" refY="6" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1,1.5 L11,6 L1,10.5 z" fill="#9c3030"/></marker>
+  </defs>
+
+  <!-- 위 두 갈래만 SQL을 실행한다 -->
+  <text x="436" y="58" class="band" fill="var(--mark)">SQL을 실행한다</text>
+  <line x1="436" y1="76" x2="1410" y2="76" stroke="var(--mark)" stroke-width="2" opacity=".3"/>
+
+  <!-- 아래 두 갈래는 실행하지 않는다 -->
+  <rect x="436" y="346" width="300" height="316" rx="10" fill="var(--band)"/>
+  <text x="460" y="386" class="band" fill="var(--dim)">SQL을 실행하지 않는다</text>
+
+  <!-- 질문 -->
+  <rect x="8" y="334" width="118" height="62" rx="31" fill="#fff" stroke="var(--rule)" stroke-width="2"/>
+  <text x="67" y="375" class="node" text-anchor="middle" fill="var(--dim)">질문</text>
+  <path d="M132,365 L168,365" class="flow" stroke="var(--dim)" marker-end="url(#ar-dim)"/>
+
+  <!-- 정의 사전 : 사람이 미리 쓴다.
+       라우터 프롬프트로 통째로 들어간다(router.py 의 describe_semantic_layer).
+       컴파일러도 같은 정의를 보지만 그 선은 긋지 않았다.
+       시맨틱 레이어까지 잇자면 네 갈래 중 첫 선과 겹친다. 얻는 것보다 어지러움이 크다. -->
+  <rect x="148" y="186" width="192" height="88" rx="8"
+        fill="url(#hatch)" stroke="var(--ink)" stroke-width="2.5"/>
+  <text x="244" y="222" class="node" text-anchor="middle">정의 사전</text>
+  <text x="244" y="252" class="cond" text-anchor="middle" fill="var(--dim)">지표 7 · 차원 9</text>
+  <path d="M244,280 L244,329" class="flow" stroke="var(--dim)" marker-end="url(#ar-dim)"/>
+
+  <!-- 라우터 : LLM -->
+  <rect x="168" y="329" width="152" height="72" rx="8" fill="var(--ink)"/>
+  <text x="244" y="375" class="node" text-anchor="middle" fill="#fff">라우터</text>
+
+  <!-- 네 갈래. 나가는 높이도 꺾는 열도 갈래마다 다르다 -->
+  <path d="M320,341 H364 Q376,341 376,329 V178 Q376,166 388,166 H464"
+        class="flow" stroke="var(--mark)"  marker-end="url(#ar-mark)"/>
+  <path d="M320,353 H390 Q402,353 402,341 V302 Q402,290 414,290 H464"
+        class="flow" stroke="var(--slate)" marker-end="url(#ar-slate)"/>
+  <path d="M320,377 H390 Q402,377 402,389 V464 Q402,476 414,476 H464"
+        class="flow" stroke="var(--warn)"  marker-end="url(#ar-warn)"/>
+  <path d="M320,389 H364 Q376,389 376,401 V592 Q376,604 388,604 H464"
+        class="flow" stroke="var(--stop)"  marker-end="url(#ar-stop)"/>
+
+  <!-- ══ 시맨틱 레이어 ══ -->
+  <text x="464" y="122" class="cond" fill="var(--mark)">지표·차원으로 표현된다</text>
+  <rect x="464" y="130" width="232" height="72" rx="8" fill="#fff" stroke="var(--mark)" stroke-width="2.5"/>
+  <text x="580" y="176" class="node" text-anchor="middle">시맨틱 레이어</text>
+
+  <!-- ══ SQL 직접 생성 ══ -->
+  <text x="464" y="246" class="cond" fill="var(--slate)">시맨틱 레이어 밖이다</text>
+  <rect x="464" y="254" width="232" height="72" rx="8" fill="var(--ink)"/>
+  <text x="580" y="300" class="node" text-anchor="middle" fill="#fff">SQL 직접 생성</text>
+  <path d="M696,290 L740,290" class="flow" stroke="var(--dim)" marker-end="url(#ar-dim)"/>
+  <rect x="740" y="254" width="168" height="72" rx="8" fill="#fff" stroke="var(--slate)" stroke-width="2.5"/>
+  <text x="824" y="300" class="node" text-anchor="middle">가드레일</text>
+
+  <!-- 합류 → 실행 → 조회 결과 -->
+  <path d="M696,166 H956 Q968,166 968,178 V214 Q968,226 980,226 H1018"
+        class="flow" stroke="var(--dim)" marker-end="url(#ar-dim)"/>
+  <path d="M908,290 H956 Q968,290 968,278 V238 Q968,226 980,226 H1018"
+        class="flow" stroke="var(--dim)" marker-end="url(#ar-dim)"/>
+  <rect x="1018" y="190" width="168" height="72" rx="8" fill="#fff" stroke="var(--ink)" stroke-width="2.5"/>
+  <text x="1102" y="236" class="node" text-anchor="middle">실행</text>
+  <path d="M1186,226 L1230,226" class="flow" stroke="var(--dim)" marker-end="url(#ar-dim)"/>
+  <rect x="1230" y="190" width="180" height="72" rx="36" fill="var(--mark)"/>
+  <text x="1320" y="236" class="node" text-anchor="middle" fill="#fff">조회 결과</text>
+
+  <!-- ══ 되묻기 ══ -->
+  <text x="464" y="432" class="cond" fill="var(--warn)">질문이 모호하다</text>
+  <rect x="464" y="440" width="232" height="72" rx="8" fill="#fff" stroke="var(--warn)" stroke-width="2.5"/>
+  <text x="580" y="486" class="node" text-anchor="middle">되묻기</text>
+
+  <!-- ══ 거절 ══ -->
+  <text x="464" y="560" class="cond" fill="var(--stop)">데이터로 답할 수 없다</text>
+  <rect x="464" y="568" width="232" height="72" rx="8" fill="#fff" stroke="var(--stop)" stroke-width="2.5"/>
+  <text x="580" y="614" class="node" text-anchor="middle">거절</text>
+
+  <!-- 범례 -->
+  <rect x="8" y="674" width="26" height="26" rx="5" fill="var(--ink)"/>
+  <text x="46" y="695" class="leg">LLM이 쓴다</text>
+  <rect x="178" y="674" width="26" height="26" rx="5" fill="#fff" stroke="var(--ink)" stroke-width="2.5"/>
+  <text x="216" y="695" class="leg">코드가 쓴다</text>
+  <rect x="348" y="674" width="26" height="26" rx="5" fill="url(#hatch)" stroke="var(--ink)" stroke-width="2.5"/>
+  <text x="386" y="695" class="leg">사람이 미리 쓴다</text>
+</svg>
+</div>
+</body>
+</html>
